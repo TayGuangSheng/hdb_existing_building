@@ -1,0 +1,846 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HDB Existing Building – GeoJSON Viewer</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #0b1220;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22d3ee;
+      --accent-2: #38bdf8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", Tahoma, Arial, sans-serif;
+      background: radial-gradient(circle at top, #0b1220 0%, #0f172a 45%, #0b1220 100%);
+      color: var(--text);
+    }
+
+    header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid #1f2937;
+      background: linear-gradient(135deg, #0b1220, #111827);
+    }
+
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: 0.3px;
+    }
+
+    header .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: calc(100vh - 58px);
+    }
+
+    .panel {
+      padding: 16px 16px 22px;
+      background: var(--panel);
+      border-right: 1px solid #1f2937;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      padding: 12px;
+      border-radius: 10px;
+      background: #0b1220;
+      border: 1px solid #1f2937;
+    }
+
+    .card-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .drop {
+      border: 1px dashed #334155;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      background: var(--panel-2);
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .drop.dragover {
+      border-color: var(--accent);
+      background: rgba(34, 211, 238, 0.08);
+    }
+
+    .drop strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--accent-2);
+    }
+
+    .drop input {
+      display: none;
+    }
+
+    .meta {
+      display: grid;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .meta div {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .meta span {
+      color: var(--muted);
+    }
+
+    .field-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .input,
+    .select,
+    .button {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: #0f172a;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .input:focus,
+    .select:focus,
+    .button:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+      color: #0b1220;
+      font-weight: 600;
+      border: none;
+    }
+
+    .button.secondary {
+      background: #0f172a;
+      color: var(--text);
+      border: 1px solid #334155;
+      font-weight: 500;
+    }
+
+    .button:disabled,
+    .input:disabled,
+    .select:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .stats-grid div {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stats-grid span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stats-subtitle {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ranked {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .ranked li {
+      margin-bottom: 6px;
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .legend-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid #0b1220;
+      flex-shrink: 0;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100vh - 58px);
+    }
+
+    .footer {
+      margin-top: auto;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      font-size: 11px;
+      color: var(--muted);
+      background: #0b1220;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      #map { height: 60vh; }
+      .panel { border-right: 0; border-bottom: 1px solid #1f2937; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HDB Existing Building – GeoJSON Viewer</h1>
+      <div class="hint">Load a local GeoJSON file; no upload, no server required.</div>
+    </div>
+    <span class="pill">Leaflet + OpenStreetMap</span>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <label class="drop" id="drop">
+        <strong>Drop your GeoJSON here</strong>
+        <div>or click to choose a file</div>
+        <input id="file" type="file" accept=".geojson,.json,application/geo+json,application/json" />
+      </label>
+
+      <div class="card meta">
+        <div><span>File</span><strong id="fileName">—</strong></div>
+        <div><span>Features</span><strong id="featureCount">—</strong></div>
+        <div><span>Bounds</span><strong id="bounds">—</strong></div>
+      </div>
+
+      <div class="card" id="filterCard">
+        <div class="card-title">Filter</div>
+        <label class="field-label" for="searchInput">Search</label>
+        <input class="input" id="searchInput" type="text" placeholder="Type to search..." />
+
+        <label class="field-label" for="fieldSelect">Search field</label>
+        <select class="select" id="fieldSelect"></select>
+
+        <label class="field-label" for="statusSelect">Status</label>
+        <select class="select" id="statusSelect"></select>
+
+        <div class="button-row">
+          <button class="button secondary" id="clearFilters" type="button">Clear</button>
+          <button class="button" id="exportGeojson" type="button">Export</button>
+        </div>
+      </div>
+
+      <div class="card" id="statsCard">
+        <div class="card-title">Quick stats</div>
+        <div class="stats-grid">
+          <div><span>Filtered</span><strong id="filteredCount">—</strong></div>
+          <div><span>Total area</span><strong id="totalArea">—</strong></div>
+          <div><span>Avg area</span><strong id="avgArea">—</strong></div>
+          <div><span>Min / Max</span><strong id="minMaxArea">—</strong></div>
+        </div>
+        <div class="stats-subtitle">Largest features</div>
+        <ol class="ranked" id="largestList"></ol>
+      </div>
+
+      <div class="card" id="legendCard">
+        <div class="card-title">Legend</div>
+        <div class="legend" id="legendList"></div>
+      </div>
+
+      <div class="status" id="status">Waiting for a file...</div>
+
+      <div class="footer">
+        Tip: the sample file in this folder is <code>HDBExistingBuilding.geojson</code>.
+      </div>
+    </section>
+
+    <div id="map"></div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script
+    src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"
+    crossorigin=""
+  ></script>
+  <script>
+    const map = L.map("map", {
+      zoomControl: true,
+      maxZoom: 19,
+      minZoom: 2
+    }).setView([1.3521, 103.8198], 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 19
+    }).addTo(map);
+
+    const palette = [
+      "#22d3ee",
+      "#38bdf8",
+      "#0ea5e9",
+      "#f97316",
+      "#facc15",
+      "#4ade80",
+      "#fb7185",
+      "#a78bfa",
+      "#f472b6"
+    ];
+
+    let layer;
+    let rawData = null;
+    let rawFeatures = [];
+    let statsByIndex = [];
+    let areaByFeature = new Map();
+    let featureIndex = new Map();
+    let propertyKeys = [];
+    let searchField = "";
+    let statusField = "";
+    let statusColors = new Map();
+    let fitOnNextUpdate = false;
+    let currentFileName = "data";
+
+    const fileInput = document.getElementById("file");
+    const dropZone = document.getElementById("drop");
+    const status = document.getElementById("status");
+
+    const fileNameEl = document.getElementById("fileName");
+    const featureCountEl = document.getElementById("featureCount");
+    const boundsEl = document.getElementById("bounds");
+    const filteredCountEl = document.getElementById("filteredCount");
+    const totalAreaEl = document.getElementById("totalArea");
+    const avgAreaEl = document.getElementById("avgArea");
+    const minMaxAreaEl = document.getElementById("minMaxArea");
+    const largestListEl = document.getElementById("largestList");
+    const legendListEl = document.getElementById("legendList");
+
+    const searchInput = document.getElementById("searchInput");
+    const fieldSelect = document.getElementById("fieldSelect");
+    const statusSelect = document.getElementById("statusSelect");
+    const clearFiltersBtn = document.getElementById("clearFilters");
+    const exportBtn = document.getElementById("exportGeojson");
+
+    function setStatus(msg) {
+      status.textContent = msg;
+    }
+
+    function setControlsEnabled(enabled) {
+      const hasProperties = propertyKeys.length > 0;
+      searchInput.disabled = !enabled || !hasProperties;
+      fieldSelect.disabled = !enabled || !hasProperties;
+      statusSelect.disabled = !enabled || !statusField;
+      clearFiltersBtn.disabled = !enabled;
+      exportBtn.disabled = !enabled;
+    }
+
+    function clearLayer() {
+      if (layer) {
+        map.removeLayer(layer);
+        layer = null;
+      }
+    }
+
+    function formatBounds(bounds) {
+      if (!bounds.isValid()) return "—";
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      return `${sw.lat.toFixed(4)}, ${sw.lng.toFixed(4)} → ${ne.lat.toFixed(4)}, ${ne.lng.toFixed(4)}`;
+    }
+
+    function formatArea(area) {
+      if (!area || Number.isNaN(area) || area <= 0) return "—";
+      if (area >= 1e6) {
+        return `${(area / 1e6).toFixed(2)} km²`;
+      }
+      if (area >= 10000) {
+        return `${(area / 10000).toFixed(2)} ha`;
+      }
+      return `${area.toFixed(0)} m²`;
+    }
+
+    function getFeaturesFromData(data) {
+      if (!data || !data.type) return [];
+      if (data.type === "FeatureCollection" && Array.isArray(data.features)) {
+        return data.features;
+      }
+      if (data.type === "Feature") {
+        return [data];
+      }
+      if (data.type && data.coordinates) {
+        return [{ type: "Feature", properties: {}, geometry: data }];
+      }
+      return [];
+    }
+
+    function collectPropertyKeys(features) {
+      const keys = new Set();
+      features.forEach((feature) => {
+        if (!feature || !feature.properties) return;
+        Object.keys(feature.properties).forEach((key) => keys.add(key));
+      });
+      return Array.from(keys);
+    }
+
+    function pickField(keys, candidates) {
+      for (const candidate of candidates) {
+        if (keys.includes(candidate)) return candidate;
+      }
+      return keys[0] || "";
+    }
+
+    function buildSelectOptions(selectEl, options, includeAll) {
+      selectEl.innerHTML = "";
+      if (includeAll) {
+        const option = document.createElement("option");
+        option.value = "All";
+        option.textContent = "All";
+        selectEl.appendChild(option);
+      }
+      options.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        selectEl.appendChild(option);
+      });
+    }
+
+    function buildStatusColors(values) {
+      statusColors = new Map();
+      values.forEach((value, index) => {
+        const color = palette[index % palette.length];
+        statusColors.set(value, color);
+      });
+    }
+
+    function getStatusValue(feature) {
+      if (!statusField || !feature || !feature.properties) return "";
+      return feature.properties[statusField] ?? "";
+    }
+
+    function styleForFeature(feature) {
+      const statusValue = getStatusValue(feature);
+      const color = statusValue && statusColors.has(statusValue)
+        ? statusColors.get(statusValue)
+        : "#38bdf8";
+      return {
+        color,
+        weight: 2,
+        opacity: 0.9,
+        fillColor: color,
+        fillOpacity: 0.25
+      };
+    }
+
+    function getFeatureLabel(feature, index) {
+      const props = feature.properties || {};
+      const fallbackKeys = [
+        "NAME",
+        "Name",
+        "name",
+        "PROJECT",
+        "PROJECT_NAME",
+        "TITLE",
+        "TOWN",
+        "OBJECTID",
+        "OBJECTID_1",
+        "id",
+        "ID"
+      ];
+      if (searchField && props[searchField]) return props[searchField];
+      for (const key of fallbackKeys) {
+        if (props[key]) return props[key];
+      }
+      return `Feature ${index + 1}`;
+    }
+
+    function buildPopup(feature, index) {
+      const props = feature.properties || {};
+      const entries = Object.entries(props).map(([key, value]) => {
+        const display = value === null || value === undefined ? "" : String(value);
+        return `<strong>${key}</strong>: ${display}`;
+      });
+      const area = areaByFeature.get(feature);
+      if (area && area > 0) {
+        entries.push(`<strong>AREA</strong>: ${formatArea(area)}`);
+      }
+      return entries.length ? entries.join("<br>") : "No properties";
+    }
+
+    function updateLayer(features) {
+      clearLayer();
+      if (!features.length) return;
+
+      layer = L.geoJSON(features, {
+        style: styleForFeature,
+        onEachFeature: (feature, layerItem) => {
+          const index = featureIndex.get(feature) ?? 0;
+          layerItem.bindPopup(buildPopup(feature, index));
+        }
+      }).addTo(map);
+
+      if (fitOnNextUpdate) {
+        const bounds = layer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.05));
+        }
+        fitOnNextUpdate = false;
+      }
+    }
+
+    function updateLegend(features) {
+      legendListEl.innerHTML = "";
+      if (!statusField) {
+        legendListEl.innerHTML = "<div>No status field detected.</div>";
+        return;
+      }
+      const counts = new Map();
+      features.forEach((feature) => {
+        const value = getStatusValue(feature) || "Unknown";
+        counts.set(value, (counts.get(value) || 0) + 1);
+      });
+
+      const orderedStatuses = Array.from(statusColors.keys());
+      if (!orderedStatuses.length) {
+        legendListEl.innerHTML = "<div>No status values found.</div>";
+        return;
+      }
+
+      orderedStatuses.forEach((value) => {
+        const count = counts.get(value) || 0;
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        const left = document.createElement("div");
+        left.className = "legend-left";
+        const swatch = document.createElement("span");
+        swatch.className = "legend-swatch";
+        swatch.style.background = statusColors.get(value);
+        const label = document.createElement("span");
+        label.textContent = value;
+        left.appendChild(swatch);
+        left.appendChild(label);
+        const right = document.createElement("span");
+        right.textContent = count;
+        item.appendChild(left);
+        item.appendChild(right);
+        legendListEl.appendChild(item);
+      });
+    }
+
+    function updateStats(features, stats) {
+      filteredCountEl.textContent = String(features.length);
+      if (!stats.length) {
+        totalAreaEl.textContent = "—";
+        avgAreaEl.textContent = "—";
+        minMaxAreaEl.textContent = "—";
+        largestListEl.innerHTML = "<li>—</li>";
+        return;
+      }
+
+      const areas = stats.map((item) => item.area).filter((area) => area > 0);
+      const totalArea = areas.reduce((sum, area) => sum + area, 0);
+      const avgArea = areas.length ? totalArea / areas.length : 0;
+      const minArea = areas.length ? Math.min(...areas) : 0;
+      const maxArea = areas.length ? Math.max(...areas) : 0;
+
+      totalAreaEl.textContent = areas.length ? formatArea(totalArea) : "—";
+      avgAreaEl.textContent = areas.length ? formatArea(avgArea) : "—";
+      minMaxAreaEl.textContent = areas.length
+        ? `${formatArea(minArea)} / ${formatArea(maxArea)}`
+        : "—";
+
+      const ranked = stats
+        .filter((item) => item.area > 0)
+        .sort((a, b) => b.area - a.area)
+        .slice(0, 5);
+
+      largestListEl.innerHTML = "";
+      if (!ranked.length) {
+        largestListEl.innerHTML = "<li>—</li>";
+        return;
+      }
+
+      ranked.forEach((item) => {
+        const feature = rawFeatures[item.index];
+        const label = getFeatureLabel(feature, item.index);
+        const li = document.createElement("li");
+        li.textContent = `${label} — ${formatArea(item.area)}`;
+        largestListEl.appendChild(li);
+      });
+    }
+
+    function applyFilters() {
+      if (!rawFeatures.length) return;
+      const query = searchInput.value.trim().toLowerCase();
+      const selectedField = fieldSelect.value;
+      const selectedStatus = statusSelect.value;
+      const hasSelectedField = Boolean(selectedField) && propertyKeys.length > 0;
+
+      const filtered = [];
+      const filteredStats = [];
+
+      rawFeatures.forEach((feature, index) => {
+        if (!feature) return;
+        if (statusField && selectedStatus !== "All") {
+          const value = getStatusValue(feature);
+          if (String(value) !== String(selectedStatus)) return;
+        }
+        if (query) {
+          const props = feature.properties || {};
+          const hay = hasSelectedField
+            ? String(props[selectedField] ?? "").toLowerCase()
+            : Object.values(props).map((val) => String(val ?? "")).join(" ").toLowerCase();
+          if (!hay.includes(query)) return;
+        }
+        filtered.push(feature);
+        filteredStats.push(statsByIndex[index]);
+      });
+
+      updateLayer(filtered);
+      updateLegend(filtered);
+      updateStats(filtered, filteredStats);
+      if (filtered.length) {
+        setStatus(`Loaded. Showing ${filtered.length} of ${rawFeatures.length}.`);
+      } else {
+        setStatus("No features match the filters.");
+      }
+    }
+
+    function loadGeoJSON(text, fileName = "") {
+      clearLayer();
+      setStatus("Parsing GeoJSON...");
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        setStatus("Invalid JSON file.");
+        return;
+      }
+
+      rawData = data;
+      rawFeatures = getFeaturesFromData(data);
+      if (!rawFeatures.length) {
+        setStatus("No features found in this file.");
+        return;
+      }
+
+      propertyKeys = collectPropertyKeys(rawFeatures);
+      searchField = pickField(propertyKeys, ["NAME", "Name", "name"]);
+      statusField = pickField(propertyKeys, ["STATUS", "Status", "status"]);
+      const uniqueStatuses = statusField
+        ? Array.from(new Set(rawFeatures.map((feature) => getStatusValue(feature)).filter((v) => v !== "")))
+        : [];
+
+      if (propertyKeys.length) {
+        buildSelectOptions(fieldSelect, propertyKeys, false);
+        fieldSelect.value = searchField || propertyKeys[0];
+      } else {
+        buildSelectOptions(fieldSelect, ["(No properties)"], false);
+      }
+      if (statusField) {
+        buildSelectOptions(statusSelect, uniqueStatuses, true);
+      } else {
+        buildSelectOptions(statusSelect, ["(No status field)"], false);
+      }
+
+      buildStatusColors(uniqueStatuses);
+      areaByFeature = new Map();
+      featureIndex = new Map();
+      statsByIndex = rawFeatures.map((feature, index) => {
+        let area = 0;
+        if (feature && feature.geometry && ["Polygon", "MultiPolygon"].includes(feature.geometry.type)) {
+          try {
+            area = turf.area(feature);
+          } catch (err) {
+            area = 0;
+          }
+        }
+        areaByFeature.set(feature, area);
+        featureIndex.set(feature, index);
+        return { index, area };
+      });
+
+      fitOnNextUpdate = true;
+      const count = rawFeatures.length;
+      currentFileName = fileName || "data";
+      fileNameEl.textContent = fileName || "(unnamed)";
+      featureCountEl.textContent = count;
+      const rawBounds = L.geoJSON(rawFeatures).getBounds();
+      boundsEl.textContent = formatBounds(rawBounds);
+      searchInput.value = "";
+      if (statusField) statusSelect.value = "All";
+      setControlsEnabled(true);
+      applyFilters();
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      setStatus("Reading file...");
+      const reader = new FileReader();
+      reader.onload = () => loadGeoJSON(reader.result, file.name);
+      reader.onerror = () => setStatus("Could not read file.");
+      reader.readAsText(file);
+    }
+
+    function exportFiltered() {
+      if (!rawFeatures.length) return;
+      const query = searchInput.value.trim().toLowerCase();
+      const selectedField = fieldSelect.value;
+      const selectedStatus = statusSelect.value;
+      const output = [];
+
+      rawFeatures.forEach((feature) => {
+        if (!feature) return;
+        if (statusField && selectedStatus !== "All") {
+          const value = getStatusValue(feature);
+          if (String(value) !== String(selectedStatus)) return;
+        }
+        if (query) {
+          const props = feature.properties || {};
+          const fieldValue = props[selectedField];
+          const hay = fieldValue === null || fieldValue === undefined ? "" : String(fieldValue).toLowerCase();
+          if (!hay.includes(query)) return;
+        }
+        output.push(feature);
+      });
+
+      const exportData = {
+        type: "FeatureCollection",
+        features: output
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/geo+json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const baseName = (currentFileName || "data").replace(/\.[^/.]+$/, "");
+      link.href = url;
+      link.download = `${baseName}_filtered.geojson`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setStatus(`Exported ${output.length} features.`);
+    }
+
+    setControlsEnabled(false);
+
+    fileInput.addEventListener("change", (event) => handleFile(event.target.files[0]));
+
+    dropZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+    dropZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = event.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    searchInput.addEventListener("input", applyFilters);
+    fieldSelect.addEventListener("change", applyFilters);
+    statusSelect.addEventListener("change", applyFilters);
+    clearFiltersBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      if (statusField) statusSelect.value = "All";
+      if (searchField) fieldSelect.value = searchField;
+      applyFilters();
+    });
+    exportBtn.addEventListener("click", exportFiltered);
+  </script>
+</body>
+</html>
